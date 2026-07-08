@@ -12,7 +12,13 @@ import { getCampaign, sendCampaignMessage, renameCampaign, deleteCampaign } from
 
 export const Route = createFileRoute("/_authenticated/campaigns/$campaignId")({
   head: () => ({
-    meta: [{ title: "حملة — AdForge" }],
+    meta: [
+      { title: "حملة — استوديو المحتوى الإعلاني — AdForge" },
+      { name: "description", content: "أنشئ محتوى إعلانياً بالتعاون مع Copilot: نصوص، كابشن، هاشتاجات، سكربتات فيديو، وأفكار صور." },
+      { name: "robots", content: "noindex" },
+      { property: "og:title", content: "استوديو المحتوى الإعلاني — AdForge" },
+      { property: "og:description", content: "محادثة مع GPT-5.5 لإنتاج نصوص وصور وسيناريوهات إعلانية." },
+    ],
   }),
   component: CampaignChat,
   errorComponent: ({ error, reset }) => {
