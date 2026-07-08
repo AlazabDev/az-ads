@@ -37,7 +37,7 @@ function Nav() {
           <a href="#cta" className="hover:text-brand transition">البدء</a>
         </nav>
         <Link
-          to="/studio"
+          to="/campaigns"
           className="inline-flex items-center gap-2 rounded-xl bg-brand text-brand-foreground px-5 py-2.5 text-sm font-semibold shadow-brand hover:opacity-90 transition"
         >
           افتح الاستوديو
@@ -71,7 +71,7 @@ function Hero() {
         </p>
         <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
           <Link
-            to="/studio"
+            to="/campaigns"
             className="inline-flex items-center gap-2 rounded-2xl bg-brand text-brand-foreground px-8 py-4 font-bold shadow-brand hover:scale-[1.02] transition"
           >
             ابدأ الإنشاء مجاناً
@@ -176,7 +176,7 @@ function CTA() {
             جرّب AdForge الآن — أنشئ أول إعلان بالذكاء الاصطناعي في أقل من دقيقة.
           </p>
           <Link
-            to="/studio"
+            to="/campaigns"
             className="inline-flex items-center gap-2 rounded-2xl bg-gold text-gold-foreground px-10 py-5 font-bold text-lg shadow-gold hover:scale-[1.03] transition"
           >
             افتح الاستوديو الآن
