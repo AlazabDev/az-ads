@@ -12,10 +12,12 @@ function Index() {
   return (
     <div className="min-h-screen bg-background text-foreground bg-gradient-mesh">
       <Nav />
-      <Hero />
-      <Features />
-      <Channels />
-      <CTA />
+      <main>
+        <Hero />
+        <Features />
+        <Channels />
+        <CTA />
+      </main>
       <Footer />
     </div>
   );
