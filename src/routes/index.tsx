@@ -6,6 +6,12 @@ import {
 
 export const Route = createFileRoute("/")({
   component: Index,
+  head: () => ({
+    meta: [
+      { property: "og:url", content: "https://az-ads.lovable.app/" },
+    ],
+    links: [{ rel: "canonical", href: "https://az-ads.lovable.app/" }],
+  }),
 });
 
 function Index() {
