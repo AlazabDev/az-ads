@@ -8,7 +8,11 @@ export const Route = createFileRoute("/auth")({
     meta: [
       { title: "تسجيل الدخول — AdForge" },
       { name: "description", content: "سجّل الدخول أو أنشئ حساباً لحفظ حملاتك الإعلانية." },
+      { property: "og:title", content: "تسجيل الدخول — AdForge" },
+      { property: "og:description", content: "ادخل حسابك في AdForge لإدارة حملاتك الإعلانية المولّدة بالذكاء الاصطناعي." },
+      { property: "og:url", content: "https://az-ads.lovable.app/auth" },
     ],
+    links: [{ rel: "canonical", href: "https://az-ads.lovable.app/auth" }],
   }),
   component: AuthPage,
 });

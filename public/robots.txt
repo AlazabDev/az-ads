@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /auth
+Disallow: /campaigns
+
+Sitemap: https://az-ads.lovable.app/sitemap.xml
