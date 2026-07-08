@@ -4,7 +4,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import {
   Sparkles, Wand2, Loader2, Copy, Check, ArrowRight,
-  Facebook, Instagram, Video, MessageCircle, Send,
+  Globe, Camera, Video, MessageCircle, Send,
   Type, Hash, FileVideo, Megaphone,
 } from "lucide-react";
 import { generateAdContent } from "@/lib/azure-ai.functions";
@@ -47,10 +47,10 @@ const KINDS: { id: Kind; label: string; icon: typeof Type; desc: string }[] = [
   { id: "video_script", label: "سكربت فيديو", icon: FileVideo, desc: "ريلز / تيك توك" },
 ];
 
-const PLATFORMS: { id: Platform; label: string; icon: typeof Facebook }[] = [
+const PLATFORMS: { id: Platform; label: string; icon: typeof Globe }[] = [
   { id: "general", label: "عام", icon: Sparkles },
-  { id: "facebook", label: "فيسبوك", icon: Facebook },
-  { id: "instagram", label: "إنستغرام", icon: Instagram },
+  { id: "facebook", label: "فيسبوك", icon: Globe },
+  { id: "instagram", label: "إنستغرام", icon: Camera },
   { id: "tiktok", label: "تيك توك", icon: Video },
   { id: "whatsapp", label: "واتساب", icon: MessageCircle },
   { id: "telegram", label: "تيليجرام", icon: Send },

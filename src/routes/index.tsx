@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   Sparkles, Image as ImageIcon, Video, Send, BarChart3,
-  Facebook, Instagram, MessageCircle, Zap, ArrowLeft, Wand2, Layers,
+  MessageCircle, Zap, ArrowLeft, Wand2, Layers,
 } from "lucide-react";
 
 export const Route = createFileRoute("/")({
@@ -137,8 +137,8 @@ function Features() {
 
 function Channels() {
   const channels = [
-    { icon: Facebook, name: "Facebook" },
-    { icon: Instagram, name: "Instagram" },
+    { icon: Globe, name: "Globe" },
+    { icon: Camera, name: "Camera" },
     { icon: Video, name: "TikTok" },
     { icon: MessageCircle, name: "WhatsApp" },
     { icon: Send, name: "Telegram" },
