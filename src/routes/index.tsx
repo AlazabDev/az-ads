@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   Sparkles, Image as ImageIcon, Video, Send, BarChart3,
-  MessageCircle, Zap, ArrowLeft, Wand2, Layers,
+  MessageCircle, Zap, Globe, Camera, ArrowLeft, Wand2, Layers,
 } from "lucide-react";
 
 export const Route = createFileRoute("/")({
