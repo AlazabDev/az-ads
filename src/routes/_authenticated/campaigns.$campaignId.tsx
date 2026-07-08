@@ -183,7 +183,8 @@ function CampaignChat() {
         </div>
       </header>
 
-      <div className="flex-1 max-w-7xl w-full mx-auto grid lg:grid-cols-[280px_1fr] gap-4 p-4">
+      <main className="flex-1 max-w-7xl w-full mx-auto grid lg:grid-cols-[280px_1fr] gap-4 p-4">
+        <h1 className="sr-only">استوديو المحتوى الإعلاني — {campaign?.title ?? "حملة"}</h1>
         <aside className="rounded-2xl border border-border bg-card p-4 h-fit lg:sticky lg:top-[76px]">
           <div className="text-xs font-bold text-gold mb-3 flex items-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5" />
@@ -299,7 +300,7 @@ function CampaignChat() {
             </div>
           </form>
         </section>
-      </div>
+      </main>
     </div>
   );
 }
