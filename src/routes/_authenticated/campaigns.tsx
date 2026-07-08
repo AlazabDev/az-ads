@@ -12,6 +12,9 @@ export const Route = createFileRoute("/_authenticated/campaigns")({
     meta: [
       { title: "حملاتي — AdForge" },
       { name: "description", content: "قائمة الحملات الإعلانية المحفوظة." },
+      { name: "robots", content: "noindex" },
+      { property: "og:title", content: "حملاتي — AdForge" },
+      { property: "og:description", content: "استعرض حملاتك الإعلانية المحفوظة وتابع العمل عليها." },
     ],
   }),
   component: CampaignsPage,
