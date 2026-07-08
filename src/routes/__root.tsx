@@ -80,9 +80,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { title: "AdForge — استوديو الإعلانات بالذكاء الاصطناعي" },
       { name: "description", content: "منصة عربية لإنشاء الصور والفيديوهات والنصوص الإعلانية بالذكاء الاصطناعي، ونشرها على Meta وTikTok وواتساب وتيليجرام." },
       { property: "og:title", content: "AdForge — استوديو الإعلانات بالذكاء الاصطناعي" },
-      { property: "og:description", content: "أنشئ محتوى إعلاني احترافي وانشره على كل منصاتك من مكان واحد." },
+      { property: "og:description", content: "منصة عربية لإنشاء الصور والفيديوهات والنصوص الإعلانية بالذكاء الاصطناعي، ونشرها على Meta وTikTok وواتساب وتيليجرام." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "AdForge — استوديو الإعلانات بالذكاء الاصطناعي" },
+      { name: "twitter:description", content: "منصة عربية لإنشاء الصور والفيديوهات والنصوص الإعلانية بالذكاء الاصطناعي، ونشرها على Meta وTikTok وواتساب وتيليجرام." },
+      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/c3b08d39-433f-4b61-9303-c8d1f9df0f94" },
+      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/c3b08d39-433f-4b61-9303-c8d1f9df0f94" },
     ],
     links: [
       {
