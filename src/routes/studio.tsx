@@ -1,19 +1,20 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
 import {
-  Sparkles, Wand2, Loader2, Copy, Check, ArrowRight,
-  Globe, Camera, Video, MessageCircle, Send,
-  Type, Hash, FileVideo, Megaphone,
+  Sparkles, Loader2, Copy, Check, ArrowRight, Send, Trash2,
+  Megaphone, Hash, FileVideo, Image as ImageIcon, Calendar,
+  Target, Lightbulb, TrendingUp, Languages, RefreshCw,
 } from "lucide-react";
-import { generateAdContent } from "@/lib/azure-ai.functions";
+import { chatWithAzure } from "@/lib/azure-ai.functions";
 
 export const Route = createFileRoute("/studio")({
   head: () => ({
     meta: [
-      { title: "الاستوديو — AdForge" },
-      { name: "description", content: "أنشئ نصوصاً وصوراً وفيديوهات إعلانية بالذكاء الاصطناعي." },
+      { title: "استوديو المحتوى — AdForge" },
+      { name: "description", content: "استوديو محادثة مع GPT-5.5 لإنشاء نصوص وصور وسيناريوهات إعلانية." },
     ],
   }),
   component: StudioPage,
@@ -37,220 +38,262 @@ export const Route = createFileRoute("/studio")({
   notFoundComponent: () => <div className="p-10 text-center">الصفحة غير موجودة</div>,
 });
 
-type Kind = "ad_copy" | "caption" | "hashtags" | "video_script";
-type Platform = "facebook" | "instagram" | "tiktok" | "whatsapp" | "telegram" | "general";
+type Msg = { role: "user" | "assistant"; content: string };
 
-const KINDS: { id: Kind; label: string; icon: typeof Type; desc: string }[] = [
-  { id: "ad_copy", label: "نص إعلاني", icon: Megaphone, desc: "عنوان + وصف + CTA" },
-  { id: "caption", label: "كابشن سوشيال", icon: Type, desc: "منشور جذاب" },
-  { id: "hashtags", label: "هاشتاجات", icon: Hash, desc: "15 هاشتاج مستهدف" },
-  { id: "video_script", label: "سكربت فيديو", icon: FileVideo, desc: "ريلز / تيك توك" },
+const STORAGE_KEY = "adforge.studio.chat.v1";
+
+const TOOLS: {
+  id: string;
+  label: string;
+  icon: typeof Megaphone;
+  template: string;
+}[] = [
+  { id: "ad", label: "نص إعلاني", icon: Megaphone,
+    template: "اكتب نصاً إعلانياً قوياً (عنوان + وصف + CTA) لـ: " },
+  { id: "caption", label: "كابشن سوشيال", icon: Sparkles,
+    template: "اقترح 3 كابشنات جذابة مع إيموجي لمنشور على إنستغرام عن: " },
+  { id: "hash", label: "هاشتاجات", icon: Hash,
+    template: "أعطني 15 هاشتاج مستهدف (عربي + إنجليزي) لمنتج/موضوع: " },
+  { id: "script", label: "سكربت فيديو", icon: FileVideo,
+    template: "اكتب سكربت ريلز/تيك توك مدته 30 ثانية بمشاهد مرقّمة عن: " },
+  { id: "image", label: "أفكار صور", icon: ImageIcon,
+    template: "اقترح 5 أفكار Prompt احترافية لتوليد صور إعلانية (بالإنجليزية داخل code) لـ: " },
+  { id: "plan", label: "خطة نشر أسبوعية", icon: Calendar,
+    template: "صمّم خطة نشر أسبوعية (7 أيام) لكل من إنستغرام وتيك توك وواتساب لعلامة/منتج: " },
+  { id: "audience", label: "تحليل جمهور", icon: Target,
+    template: "حلّل الجمهور المستهدف (ديموغرافيا، اهتمامات، نقاط ألم، رسائل تجذبهم) لـ: " },
+  { id: "ideas", label: "أفكار حملات", icon: Lightbulb,
+    template: "اقترح 5 أفكار حملات إعلانية إبداعية لموسم/مناسبة/منتج: " },
+  { id: "improve", label: "تحسين نص", icon: TrendingUp,
+    template: "حسّن النص التالي ليكون أكثر جاذبية وإقناعاً ومناسبة لسوشيال ميديا:\n\n" },
+  { id: "translate", label: "ترجمة إعلانية", icon: Languages,
+    template: "ترجم النص التالي إلى إنجليزية إعلانية طبيعية مع الحفاظ على الأثر التسويقي:\n\n" },
 ];
 
-const PLATFORMS: { id: Platform; label: string; icon: typeof Globe }[] = [
-  { id: "general", label: "عام", icon: Sparkles },
-  { id: "facebook", label: "فيسبوك", icon: Globe },
-  { id: "instagram", label: "إنستغرام", icon: Camera },
-  { id: "tiktok", label: "تيك توك", icon: Video },
-  { id: "whatsapp", label: "واتساب", icon: MessageCircle },
-  { id: "telegram", label: "تيليجرام", icon: Send },
-];
+const WELCOME: Msg = {
+  role: "assistant",
+  content:
+    "مرحباً 👋 أنا **AdForge Copilot** — مساعدك لصناعة المحتوى الإعلاني.\n\nاختر أداة سريعة من اليمين، أو اكتب طلبك مباشرة: مثل _\"اكتب إعلان لمقهى مختص جديد في الرياض\"_.",
+};
 
 function StudioPage() {
-  const [kind, setKind] = useState<Kind>("ad_copy");
-  const [platform, setPlatform] = useState<Platform>("instagram");
-  const [prompt, setPrompt] = useState("");
-  const [tone, setTone] = useState("احترافي وجذاب");
-  const [copied, setCopied] = useState(false);
+  const [messages, setMessages] = useState<Msg[]>([WELCOME]);
+  const [input, setInput] = useState("");
+  const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  const gen = useServerFn(generateAdContent);
+  // Load from localStorage
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as Msg[];
+        if (Array.isArray(parsed) && parsed.length) setMessages(parsed);
+      }
+    } catch {}
+    inputRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(messages)); } catch {}
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+  }, [messages]);
+
+  const chat = useServerFn(chatWithAzure);
   const mutation = useMutation({
-    mutationFn: (input: { prompt: string; kind: Kind; platform: Platform; tone: string }) =>
-      gen({ data: input }),
+    mutationFn: (msgs: Msg[]) => chat({ data: { messages: msgs } }),
+    onSuccess: (data) => {
+      setMessages((prev) => [...prev, { role: "assistant", content: data.content }]);
+      setTimeout(() => inputRef.current?.focus(), 0);
+    },
   });
 
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!prompt.trim()) return;
-    mutation.mutate({ prompt, kind, platform, tone });
+  const send = (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed || mutation.isPending) return;
+    const next: Msg[] = [...messages.filter((m) => m !== WELCOME || messages.length > 1), { role: "user", content: trimmed }];
+    // Ensure welcome is preserved but not sent as user
+    const clean = next;
+    setMessages(clean);
+    setInput("");
+    // Send only real convo (drop welcome)
+    const toSend = clean.filter((m, i) => !(i === 0 && m.role === "assistant" && m.content === WELCOME.content));
+    mutation.mutate(toSend);
   };
 
-  const copy = async () => {
-    if (!mutation.data?.content) return;
-    await navigator.clipboard.writeText(mutation.data.content);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+  const onSubmit = (e: React.FormEvent) => { e.preventDefault(); send(input); };
+  const onKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); }
+  };
+
+  const useTool = (template: string) => {
+    setInput(template);
+    setTimeout(() => {
+      inputRef.current?.focus();
+      const el = inputRef.current;
+      if (el) { el.selectionStart = el.selectionEnd = el.value.length; }
+    }, 0);
+  };
+
+  const resetChat = () => {
+    if (!confirm("مسح المحادثة بالكامل؟")) return;
+    setMessages([WELCOME]);
+    localStorage.removeItem(STORAGE_KEY);
+  };
+
+  const retry = () => {
+    // resend last user message
+    const lastUserIdx = [...messages].reverse().findIndex((m) => m.role === "user");
+    if (lastUserIdx === -1) return;
+    const trimIdx = messages.length - lastUserIdx;
+    const upTo = messages.slice(0, trimIdx);
+    setMessages(upTo);
+    mutation.mutate(upTo.filter((m) => !(m === WELCOME)));
+  };
+
+  const copyMsg = async (idx: number, text: string) => {
+    await navigator.clipboard.writeText(text);
+    setCopiedIdx(idx);
+    setTimeout(() => setCopiedIdx(null), 1500);
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Top bar */}
-      <header className="border-b border-border bg-card/60 backdrop-blur sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto flex items-center justify-between px-6 py-4">
+    <div className="min-h-screen bg-background flex flex-col">
+      <header className="border-b border-border bg-card/70 backdrop-blur sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto flex items-center justify-between px-6 py-3">
           <Link to="/" className="flex items-center gap-2">
             <div className="w-9 h-9 rounded-xl bg-gradient-brand grid place-items-center shadow-brand">
               <Sparkles className="w-5 h-5 text-brand-foreground" />
             </div>
-            <span className="font-display font-bold text-xl text-brand">AdForge</span>
-            <span className="text-xs text-muted-foreground mr-2 hidden md:inline">الاستوديو</span>
+            <div>
+              <div className="font-display font-bold text-lg text-brand leading-none">AdForge</div>
+              <div className="text-[11px] text-muted-foreground mt-0.5">استوديو المحتوى · GPT-5.5</div>
+            </div>
           </Link>
-          <Link to="/" className="text-sm text-muted-foreground hover:text-brand inline-flex items-center gap-1">
-            <ArrowRight className="w-4 h-4" />
-            الرئيسية
-          </Link>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={resetChat}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-muted-foreground hover:text-destructive hover:border-destructive/40 transition"
+              title="محادثة جديدة"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              جديدة
+            </button>
+            <Link to="/" className="text-sm text-muted-foreground hover:text-brand inline-flex items-center gap-1">
+              <ArrowRight className="w-4 h-4" />
+              الرئيسية
+            </Link>
+          </div>
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-6 py-10 grid lg:grid-cols-[380px_1fr] gap-8">
-        {/* Controls */}
-        <form onSubmit={submit} className="space-y-6">
-          <div>
-            <div className="text-xs font-bold text-gold mb-2">١. نوع المحتوى</div>
-            <div className="grid grid-cols-2 gap-2">
-              {KINDS.map((k) => {
-                const active = kind === k.id;
-                return (
-                  <button
-                    type="button"
-                    key={k.id}
-                    onClick={() => setKind(k.id)}
-                    className={`text-right rounded-2xl border p-4 transition ${
-                      active
-                        ? "border-brand bg-brand text-brand-foreground shadow-brand"
-                        : "border-border bg-card hover:border-brand/40"
-                    }`}
-                  >
-                    <k.icon className={`w-5 h-5 mb-2 ${active ? "text-gold" : "text-brand"}`} />
-                    <div className="font-bold text-sm">{k.label}</div>
-                    <div className={`text-xs mt-1 ${active ? "text-brand-foreground/70" : "text-muted-foreground"}`}>
-                      {k.desc}
+      <div className="flex-1 max-w-7xl w-full mx-auto grid lg:grid-cols-[280px_1fr] gap-4 p-4">
+        {/* Tools sidebar */}
+        <aside className="rounded-2xl border border-border bg-card p-4 h-fit lg:sticky lg:top-[76px]">
+          <div className="text-xs font-bold text-gold mb-3 flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5" />
+            أدوات سريعة
+          </div>
+          <div className="grid grid-cols-2 lg:grid-cols-1 gap-2">
+            {TOOLS.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => useTool(t.template)}
+                className="text-right inline-flex items-center gap-2 rounded-xl border border-border bg-surface hover:bg-surface-2 hover:border-brand/40 transition px-3 py-2.5 text-sm font-semibold text-brand"
+              >
+                <t.icon className="w-4 h-4 text-gold shrink-0" />
+                <span className="truncate">{t.label}</span>
+              </button>
+            ))}
+          </div>
+        </aside>
+
+        {/* Chat */}
+        <section className="rounded-2xl border border-border bg-card flex flex-col overflow-hidden min-h-[70vh]">
+          <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 md:p-6 space-y-5">
+            {messages.map((m, i) => (
+              <div key={i} className={`flex ${m.role === "user" ? "justify-start" : "justify-end"} md:${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                <div className={`max-w-[90%] md:max-w-[80%] group ${m.role === "user" ? "order-1" : ""}`}>
+                  <div className={`text-[11px] mb-1 font-bold ${m.role === "user" ? "text-brand" : "text-gold"}`}>
+                    {m.role === "user" ? "أنت" : "AdForge Copilot"}
+                  </div>
+                  {m.role === "user" ? (
+                    <div className="rounded-2xl rounded-tr-sm bg-brand text-brand-foreground px-4 py-3 text-[15px] whitespace-pre-wrap leading-relaxed shadow-brand">
+                      {m.content}
                     </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div>
-            <div className="text-xs font-bold text-gold mb-2">٢. المنصة</div>
-            <div className="flex flex-wrap gap-2">
-              {PLATFORMS.map((p) => {
-                const active = platform === p.id;
-                return (
-                  <button
-                    type="button"
-                    key={p.id}
-                    onClick={() => setPlatform(p.id)}
-                    className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition ${
-                      active
-                        ? "bg-gold text-gold-foreground border-gold"
-                        : "bg-card text-brand border-border hover:border-gold"
-                    }`}
-                  >
-                    <p.icon className="w-4 h-4" />
-                    {p.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div>
-            <label className="text-xs font-bold text-gold mb-2 block">٣. النبرة</label>
-            <input
-              value={tone}
-              onChange={(e) => setTone(e.target.value)}
-              className="w-full rounded-xl border border-border bg-card px-4 py-3 text-sm outline-none focus:border-brand transition"
-              placeholder="مثال: عصري، فكاهي، فاخر…"
-            />
-          </div>
-
-          <div>
-            <label className="text-xs font-bold text-gold mb-2 block">٤. اوصف منتجك/فكرتك</label>
-            <textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              rows={6}
-              className="w-full rounded-2xl border border-border bg-card px-4 py-3 text-sm outline-none focus:border-brand transition resize-none"
-              placeholder="مثال: قهوة مختصة عربية، عبوة 250 جرام، للمهنيين الشباب، سعر 45 ريال…"
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={mutation.isPending || !prompt.trim()}
-            className="w-full inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-brand text-brand-foreground px-6 py-4 font-bold shadow-brand disabled:opacity-60 hover:scale-[1.01] transition"
-          >
-            {mutation.isPending ? (
-              <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                جارٍ الإنشاء…
-              </>
-            ) : (
-              <>
-                <Wand2 className="w-5 h-5" />
-                إنشاء بالذكاء الاصطناعي
-              </>
-            )}
-          </button>
-        </form>
-
-        {/* Result */}
-        <div className="rounded-3xl border border-border bg-card p-6 md:p-10 shadow-soft min-h-[500px] relative">
-          {!mutation.data && !mutation.isPending && !mutation.error && (
-            <div className="h-full min-h-[400px] grid place-items-center text-center">
-              <div>
-                <div className="w-20 h-20 rounded-3xl bg-gradient-mesh grid place-items-center mx-auto mb-6">
-                  <Wand2 className="w-10 h-10 text-brand" />
+                  ) : (
+                    <div className="rounded-2xl rounded-tl-sm bg-surface border border-border px-4 py-3 text-[15px] leading-relaxed text-foreground prose prose-sm max-w-none prose-headings:text-brand prose-strong:text-brand prose-code:text-brand prose-code:bg-surface-2 prose-code:px-1 prose-code:rounded prose-pre:bg-ink prose-pre:text-white">
+                      <ReactMarkdown>{m.content}</ReactMarkdown>
+                      {i > 0 && (
+                        <div className="not-prose flex items-center gap-2 mt-3 pt-3 border-t border-border opacity-0 group-hover:opacity-100 transition">
+                          <button
+                            onClick={() => copyMsg(i, m.content)}
+                            className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-brand"
+                          >
+                            {copiedIdx === i ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                            {copiedIdx === i ? "تم النسخ" : "نسخ"}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-                <h3 className="text-2xl font-bold text-brand mb-2">ابدأ بوصف فكرتك</h3>
-                <p className="text-muted-foreground max-w-sm mx-auto">
-                  اختر نوع المحتوى والمنصة، ثم اكتب وصفاً موجزاً لمنتجك — GPT‑5.5 عبر Azure Foundry
-                  سيتولى الباقي.
-                </p>
               </div>
-            </div>
-          )}
+            ))}
 
-          {mutation.isPending && (
-            <div className="h-full min-h-[400px] grid place-items-center">
-              <div className="text-center">
-                <Loader2 className="w-10 h-10 text-brand animate-spin mx-auto mb-4" />
-                <p className="text-muted-foreground">يفكّر الذكاء الاصطناعي…</p>
+            {mutation.isPending && (
+              <div className="flex justify-end md:justify-start">
+                <div className="rounded-2xl rounded-tl-sm bg-surface border border-border px-4 py-3 inline-flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="w-4 h-4 animate-spin text-brand" />
+                  يفكّر Copilot…
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {mutation.error && (
-            <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-6">
-              <div className="font-bold text-destructive mb-2">تعذّر إنشاء المحتوى</div>
-              <div className="text-sm text-muted-foreground whitespace-pre-wrap">
-                {(mutation.error as Error).message}
-              </div>
-            </div>
-          )}
-
-          {mutation.data && (
-            <div>
-              <div className="flex items-center justify-between mb-5">
-                <div className="inline-flex items-center gap-2 text-xs font-semibold text-gold">
-                  <Sparkles className="w-4 h-4" />
-                  تم بواسطة {mutation.data.model}
+            {mutation.error && (
+              <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-4">
+                <div className="text-sm font-bold text-destructive mb-1">تعذّر الاتصال بالنموذج</div>
+                <div className="text-xs text-muted-foreground whitespace-pre-wrap mb-3">
+                  {(mutation.error as Error).message}
                 </div>
                 <button
-                  onClick={copy}
-                  className="inline-flex items-center gap-2 rounded-xl bg-surface border border-border px-4 py-2 text-sm font-semibold hover:bg-surface-2 transition"
+                  onClick={retry}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-brand text-brand-foreground px-3 py-1.5 text-xs font-semibold"
                 >
-                  {copied ? <Check className="w-4 h-4 text-brand" /> : <Copy className="w-4 h-4" />}
-                  {copied ? "تم النسخ" : "نسخ"}
+                  <RefreshCw className="w-3 h-3" />
+                  إعادة المحاولة
                 </button>
               </div>
-              <div className="whitespace-pre-wrap leading-relaxed text-foreground text-[15px] bg-surface rounded-2xl p-6 border border-border">
-                {mutation.data.content}
-              </div>
+            )}
+          </div>
+
+          {/* Composer */}
+          <form onSubmit={onSubmit} className="border-t border-border p-3 md:p-4 bg-card">
+            <div className="rounded-2xl border border-border bg-surface focus-within:border-brand transition p-2 flex items-end gap-2">
+              <textarea
+                ref={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={onKey}
+                rows={2}
+                placeholder="اكتب طلبك… (Enter للإرسال، Shift+Enter لسطر جديد)"
+                className="flex-1 bg-transparent resize-none outline-none px-3 py-2 text-[15px] leading-relaxed placeholder:text-muted-foreground/60 max-h-48"
+              />
+              <button
+                type="submit"
+                disabled={!input.trim() || mutation.isPending}
+                className="shrink-0 inline-flex items-center justify-center w-11 h-11 rounded-xl bg-gradient-brand text-brand-foreground shadow-brand disabled:opacity-50 hover:scale-105 transition"
+                aria-label="إرسال"
+              >
+                {mutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+              </button>
             </div>
-          )}
-        </div>
+            <div className="text-[11px] text-muted-foreground mt-2 text-center">
+              يعمل بواسطة Azure AI Foundry · GPT-5.5 · المحادثة محفوظة في متصفحك فقط
+            </div>
+          </form>
+        </section>
       </div>
     </div>
   );
