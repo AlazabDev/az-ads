@@ -73,6 +73,21 @@ export type Database = {
         }
         Relationships: []
       }
+      supcloud_keepalive: {
+        Row: {
+          id: number
+          marker: string
+        }
+        Insert: {
+          id: number
+          marker?: string
+        }
+        Update: {
+          id?: number
+          marker?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
