@@ -9,9 +9,12 @@ const STUDIO_SYSTEM = [
   '• عند طلب "نص إعلاني" قدّم: عنوان، وصف قصير، دعوة للفعل (CTA).',
   '• عند طلب "أفكار صور" قدّم 3-5 أفكار Prompt جاهزة للاستخدام في مولّدات الصور (بالإنجليزية داخل كتلة كود).',
   '• عند طلب "سكربت فيديو" قسّمه إلى مشاهد مرقّمة مع مدة وحوار وتوجيه بصري.',
+  "• إذا أُرفقت صور مع رسالة المستخدم فاستعن بها كأصول بصرية حقيقية للعلامة/المنتج: صف ما تراه، واربطه بالنص الإعلاني، واستخدم تفاصيله (ألوان، تكوين، نمط) لاقتراحات مخصصة.",
 ].join("\n");
 
-async function callAzure(messages: { role: string; content: string }[]) {
+type AzureMessage = { role: string; content: string | Array<{ type: string; text?: string; image_url?: { url: string } }> };
+
+async function callAzure(messages: AzureMessage[]) {
   const endpoint = process.env.AZURE_FOUNDRY_ENDPOINT;
   const apiKey = process.env.AZURE_FOUNDRY_API_KEY;
   const deployment = process.env.AZURE_FOUNDRY_DEPLOYMENT || "gpt-5.5";
@@ -36,6 +39,50 @@ async function callAzure(messages: { role: string; content: string }[]) {
   const json = await res.json();
   return (json?.choices?.[0]?.message?.content ?? "") as string;
 }
+
+const BRAND_BUCKET = "Alazab-Ads";
+
+function publicAssetUrl(path: string) {
+  const base = (process.env.SUPABASE_URL ?? "").replace(/\/$/, "");
+  return `${base}/storage/v1/object/public/${BRAND_BUCKET}/${path}`;
+}
+
+export const listBrandAssets = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        prefix: z.string().optional().default("raw_images"),
+        limit: z.number().int().min(1).max(200).optional().default(60),
+        offset: z.number().int().min(0).optional().default(0),
+        search: z.string().optional(),
+      })
+      .parse(d ?? {}),
+  )
+  .handler(async ({ data, context }) => {
+    const { data: rows, error } = await context.supabase.storage
+      .from(BRAND_BUCKET)
+      .list(data.prefix, {
+        limit: data.limit,
+        offset: data.offset,
+        sortBy: { column: "created_at", order: "desc" },
+        search: data.search,
+      });
+    if (error) throw new Error(error.message);
+    const items = (rows ?? [])
+      .filter((r) => r.name && !r.name.endsWith("/") && r.metadata)
+      .map((r) => {
+        const path = data.prefix ? `${data.prefix}/${r.name}` : r.name;
+        return {
+          name: r.name,
+          path,
+          url: publicAssetUrl(path),
+          size: (r.metadata as { size?: number })?.size ?? 0,
+          mimetype: (r.metadata as { mimetype?: string })?.mimetype ?? "",
+        };
+      });
+    return { items, hasMore: items.length === data.limit };
+  });
 
 export const listCampaigns = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -105,17 +152,28 @@ export const deleteCampaign = createServerFn({ method: "POST" })
 export const sendCampaignMessage = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>
-    z.object({ campaignId: z.string().uuid(), content: z.string().min(1) }).parse(d),
+    z
+      .object({
+        campaignId: z.string().uuid(),
+        content: z.string().min(1),
+        attachments: z.array(z.string().url()).max(6).optional().default([]),
+      })
+      .parse(d),
   )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
 
-    // Insert user message
+    // Persist user message. Attachments are appended as markdown image links so
+    // they render in history and stay tied to the message that used them.
+    const attachmentBlock = data.attachments.length
+      ? "\n\n" + data.attachments.map((u) => `![مرفق](${u})`).join("\n")
+      : "";
+    const storedUserContent = data.content + attachmentBlock;
     const { error: uErr } = await supabase.from("campaign_messages").insert({
       campaign_id: data.campaignId,
       user_id: userId,
       role: "user",
-      content: data.content,
+      content: storedUserContent,
     });
     if (uErr) throw new Error(uErr.message);
 
@@ -127,7 +185,17 @@ export const sendCampaignMessage = createServerFn({ method: "POST" })
       .order("created_at", { ascending: true });
     if (hErr) throw new Error(hErr.message);
 
-    const reply = await callAzure(history ?? []);
+    // Rebuild messages for the model. Convert prior stored messages to text and
+    // upgrade the LAST user message to multimodal when attachments are present.
+    const msgs: AzureMessage[] = (history ?? []).map((m) => ({ role: m.role, content: m.content }));
+    if (data.attachments.length && msgs.length) {
+      const last = msgs[msgs.length - 1];
+      last.content = [
+        { type: "text", text: data.content },
+        ...data.attachments.map((url) => ({ type: "image_url", image_url: { url } })),
+      ];
+    }
+    const reply = await callAzure(msgs);
 
     const { data: assistantRow, error: aErr } = await supabase
       .from("campaign_messages")
