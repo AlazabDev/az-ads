@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import {
   Loader2, Plus, Trash2, Upload, Link2, CheckCircle2, XCircle, Settings as SettingsIcon,
-  MessageCircle, Send as SendIcon, Facebook, Instagram, Video as VideoIcon,
+  MessageCircle, Send as SendIcon, Globe, Camera, Video as VideoIcon,
 } from "lucide-react";
 import {
   listConnections, saveConnection, deleteConnection, testConnection,
@@ -57,11 +57,11 @@ const PLATFORMS: {
     { key: "bot_token", label: "Bot Token", type: "password" },
     { key: "chat_id", label: "Default Chat ID", hint: "اختياري" },
   ]},
-  { id: "facebook", name: "Facebook Page", icon: Facebook, fields: [
+  { id: "facebook", name: "Facebook Page", icon: Globe, fields: [
     { key: "page_id", label: "Page ID" },
     { key: "page_access_token", label: "Page Access Token", type: "password" },
   ]},
-  { id: "instagram", name: "Instagram", icon: Instagram, fields: [
+  { id: "instagram", name: "Instagram", icon: Camera, fields: [
     { key: "ig_user_id", label: "IG User ID" },
     { key: "access_token", label: "Access Token", type: "password" },
   ]},
