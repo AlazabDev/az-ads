@@ -1,6 +1,6 @@
 import { Link, useRouterState, useNavigate, useRouter } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { Home, MessageSquare, Sparkles, LogOut } from "lucide-react";
+import { Home, MessageSquare, Sparkles, LogOut, Wand2, Settings as SettingsIcon } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -19,6 +19,8 @@ import { supabase } from "@/integrations/supabase/client";
 const items = [
   { title: "الرئيسية", url: "/", icon: Home },
   { title: "حملاتي", url: "/campaigns", icon: MessageSquare },
+  { title: "الاستوديو", url: "/studio", icon: Wand2 },
+  { title: "الإعدادات", url: "/settings", icon: SettingsIcon },
 ];
 
 export function AppSidebar() {
