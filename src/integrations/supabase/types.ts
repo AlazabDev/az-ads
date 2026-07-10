@@ -73,6 +73,78 @@ export type Database = {
         }
         Relationships: []
       }
+      social_connections: {
+        Row: {
+          account_label: string
+          created_at: string
+          credentials: Json
+          id: string
+          is_active: boolean
+          platform: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          account_label: string
+          created_at?: string
+          credentials?: Json
+          id?: string
+          is_active?: boolean
+          platform: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          account_label?: string
+          created_at?: string
+          credentials?: Json
+          id?: string
+          is_active?: boolean
+          platform?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      studio_assets: {
+        Row: {
+          created_at: string
+          height: number | null
+          id: string
+          kind: string
+          model: string | null
+          prompt: string
+          public_url: string
+          storage_path: string
+          user_id: string
+          width: number | null
+        }
+        Insert: {
+          created_at?: string
+          height?: number | null
+          id?: string
+          kind: string
+          model?: string | null
+          prompt: string
+          public_url: string
+          storage_path: string
+          user_id: string
+          width?: number | null
+        }
+        Update: {
+          created_at?: string
+          height?: number | null
+          id?: string
+          kind?: string
+          model?: string | null
+          prompt?: string
+          public_url?: string
+          storage_path?: string
+          user_id?: string
+          width?: number | null
+        }
+        Relationships: []
+      }
       supcloud_keepalive: {
         Row: {
           id: number
