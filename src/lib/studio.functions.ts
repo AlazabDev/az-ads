@@ -162,11 +162,13 @@ export const generateStudioImage = createServerFn({ method: "POST" })
     };
 
     const results = await Promise.allSettled(Array.from({ length: data.variants }, runOnce));
-    const rows = results.filter((r): r is PromiseFulfilledResult<typeof results[number] extends PromiseFulfilledResult<infer V> ? V : never> => r.status === "fulfilled").map((r) => r.value);
-    if (rows.length === 0) {
-      const firstErr = results.find((r) => r.status === "rejected") as PromiseRejectedResult | undefined;
-      throw new Error(firstErr?.reason?.message ?? "فشل توليد جميع الصور.");
+    const rows: Awaited<ReturnType<typeof runOnce>>[] = [];
+    let firstError: string | null = null;
+    for (const r of results) {
+      if (r.status === "fulfilled") rows.push(r.value);
+      else if (!firstError) firstError = (r.reason as Error)?.message ?? "فشل التوليد";
     }
+    if (rows.length === 0) throw new Error(firstError ?? "فشل توليد الصور.");
     return { assets: rows };
   });
 
