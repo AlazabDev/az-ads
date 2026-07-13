@@ -54,6 +54,8 @@ export const deleteBrandAsset = createServerFn({ method: "POST" })
 const GenInput = z.object({
   prompt: z.string().min(3).max(1500),
   reference_urls: z.array(z.string().url()).max(4).optional().default([]),
+  aspect_ratio: z.enum(["1:1", "4:5", "9:16", "16:9", "3:4", "4:3"]).optional().default("1:1"),
+  variants: z.number().int().min(1).max(4).optional().default(1),
 });
 
 type ContentPart =
@@ -115,52 +117,111 @@ export const generateStudioImage = createServerFn({ method: "POST" })
     if (!apiKey) throw new Error("LOVABLE_API_KEY غير مضبوط في الخادم.");
 
     const model = "google/gemini-2.5-flash-image";
-    const content: ContentPart[] = [{ type: "text", text: data.prompt }];
-    for (const url of data.reference_urls) content.push({ type: "image_url", image_url: { url } });
+    const fullPrompt = `${data.prompt}\n\nAspect ratio: ${data.aspect_ratio}. High quality, professional advertising visual.`;
 
+    const runOnce = async () => {
+      const content: ContentPart[] = [{ type: "text", text: fullPrompt }];
+      for (const url of data.reference_urls) content.push({ type: "image_url", image_url: { url } });
+      const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({ model, messages: [{ role: "user", content }], modalities: ["image", "text"] }),
+      });
+      if (!res.ok) {
+        const txt = await res.text();
+        if (res.status === 429) throw new Error("تجاوزت حد الطلبات. حاول لاحقاً.");
+        if (res.status === 402) throw new Error("رصيد Lovable AI انتهى. يرجى الترقية.");
+        throw new Error(`فشل توليد الصورة [${res.status}]: ${txt.slice(0, 300)}`);
+      }
+      const json = await res.json();
+      const img = extractBase64Image(json);
+      if (!img) throw new Error("لم يعد النموذج بصورة قابلة للقراءة.");
+      const base64 = img.dataUrl.split(",")[1] ?? "";
+      const bytes = base64ToBytes(base64);
+      const ext = img.mime.includes("jpeg") ? "jpg" : "png";
+      const path = `generated/${context.userId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const { error: upErr } = await context.supabase.storage
+        .from(BRAND_BUCKET)
+        .upload(path, bytes, { contentType: img.mime, upsert: false });
+      if (upErr) throw new Error(`فشل رفع الصورة: ${upErr.message}`);
+      const url = publicUrl(path);
+      const { data: row, error: insErr } = await context.supabase
+        .from("studio_assets")
+        .insert({
+          user_id: context.userId,
+          kind: "image",
+          prompt: data.prompt,
+          storage_path: path,
+          public_url: url,
+          model,
+        })
+        .select("id,kind,prompt,public_url,storage_path,model,created_at")
+        .single();
+      if (insErr) throw new Error(insErr.message);
+      return row;
+    };
+
+    const results = await Promise.allSettled(Array.from({ length: data.variants }, runOnce));
+    const rows: Awaited<ReturnType<typeof runOnce>>[] = [];
+    let firstError: string | null = null;
+    for (const r of results) {
+      if (r.status === "fulfilled") rows.push(r.value);
+      else if (!firstError) firstError = (r.reason as Error)?.message ?? "فشل التوليد";
+    }
+    if (rows.length === 0) throw new Error(firstError ?? "فشل توليد الصور.");
+    return { assets: rows };
+  });
+
+// ---------- Edit / iterate on an existing image ----------
+const EditInput = z.object({
+  source_url: z.string().url(),
+  prompt: z.string().min(3).max(1500),
+});
+
+export const editStudioImage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => EditInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const apiKey = process.env.LOVABLE_API_KEY;
+    if (!apiKey) throw new Error("LOVABLE_API_KEY غير مضبوط في الخادم.");
+    const model = "google/gemini-2.5-flash-image";
+    const content: ContentPart[] = [
+      { type: "text", text: `Edit this image: ${data.prompt}. Keep the composition professional and advertising-ready.` },
+      { type: "image_url", image_url: { url: data.source_url } },
+    ];
     const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model,
-        messages: [{ role: "user", content }],
-        modalities: ["image", "text"],
-      }),
+      body: JSON.stringify({ model, messages: [{ role: "user", content }], modalities: ["image", "text"] }),
     });
     if (!res.ok) {
-      const txt = await res.text();
-      if (res.status === 429) throw new Error("تجاوزت حد الطلبات. حاول لاحقاً.");
-      if (res.status === 402) throw new Error("رصيد Lovable AI انتهى. يرجى الترقية.");
-      throw new Error(`فشل توليد الصورة [${res.status}]: ${txt.slice(0, 300)}`);
+      if (res.status === 429) throw new Error("تجاوزت حد الطلبات.");
+      if (res.status === 402) throw new Error("رصيد Lovable AI انتهى.");
+      throw new Error(`فشل تعديل الصورة [${res.status}]`);
     }
-    const json = await res.json();
-    const img = extractBase64Image(json);
-    if (!img) throw new Error("لم يعد النموذج بصورة قابلة للقراءة.");
-
-    const base64 = img.dataUrl.split(",")[1] ?? "";
-    const bytes = base64ToBytes(base64);
+    const img = extractBase64Image(await res.json());
+    if (!img) throw new Error("لم يعد النموذج بصورة.");
+    const bytes = base64ToBytes(img.dataUrl.split(",")[1] ?? "");
     const ext = img.mime.includes("jpeg") ? "jpg" : "png";
-    const path = `generated/${context.userId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-
+    const path = `generated/${context.userId}/${Date.now()}-edit.${ext}`;
     const { error: upErr } = await context.supabase.storage
       .from(BRAND_BUCKET)
       .upload(path, bytes, { contentType: img.mime, upsert: false });
-    if (upErr) throw new Error(`فشل رفع الصورة: ${upErr.message}`);
-
+    if (upErr) throw new Error(upErr.message);
     const url = publicUrl(path);
-    const { data: row, error: insErr } = await context.supabase
+    const { data: row, error } = await context.supabase
       .from("studio_assets")
       .insert({
         user_id: context.userId,
         kind: "image",
-        prompt: data.prompt,
+        prompt: `[تعديل] ${data.prompt}`,
         storage_path: path,
         public_url: url,
         model,
       })
       .select("id,kind,prompt,public_url,storage_path,model,created_at")
       .single();
-    if (insErr) throw new Error(insErr.message);
+    if (error) throw new Error(error.message);
     return row;
   });
 
